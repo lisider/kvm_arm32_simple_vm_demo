@@ -14,3 +14,7 @@ Hello World! I am a Guest!
 Get From Host: G
 Guest Exit!
 root@ubuntu:~#
+
+
+平台:
+    https://blog.csdn.net/u011011827/article/details/120599618

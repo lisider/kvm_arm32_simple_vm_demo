@@ -1,28 +1,30 @@
-CC=aarch64-elf-gcc
-OBJCOPY=aarch64-elf-objcopy
-OBJDUMP=aarch64-elf-objdump
+CROSS_COMPILE=arm-linux-gnueabihf-
+CC=${CROSS_COMPILE}gcc
+LD=${CROSS_COMPILE}ld
+OBJCOPY=${CROSS_COMPILE}objcopy
+OBJDUMP=${CROSS_COMPILE}objdump
 
-CFLAGS=-Wall
+GUEST_CFLAGS=-Wall -nostdinc -nostdlib -fno-stack-protector
+GUEST_LDFLAGS=-e _start  -Ttext 0x100000 -nostdlib
 
 all: simple_virt guest
-	cp ./guest.bin ./simple_virt ../../share/
 
 simple_virt:simple_virt.c
-	aarch64-linux-gnu-gcc $< -I./kernel_header/include -o $@
+	${CC} $< -I./kernel_header/include -o $@
 
-guest: start.o main.o gcc.ld
-	$(CC) -march=armv8-a -Tgcc.ld -Wl,-Map=guest.map -nostdlib -o $@ start.o main.o
-	$(OBJDUMP) -D $@ > $@.dump
-	$(OBJCOPY) -O binary $@ $@.bin
+guest: start.o main.o
+	${LD} ${GUEST_LDFLAGS}  -o $@ start.o main.o
+	${OBJDUMP} -D $@ > $@.dump
+	${OBJCOPY} -O binary $@ $@.bin
 
 start.o:start.S
-	$(CC) -c -march=armv8-a -nostdinc -o $@ $<
+	${CC} ${GUEST_CFLAGS} -c -o $@ $<
 
 main.o:main.c
-	$(CC) -c -march=armv8-a -nostdinc -o $@ $<
+	${CC} ${GUEST_CFLAGS} -c -o $@ $<
 
 clean:
-	$(RM) *.o guest simple_virt *.map *.dump *.bin
+	rm -rf *.o guest simple_virt *.map *.dump *.bin
 
 .PHONY: all clean
 

@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <linux/stddef.h>
+#include <stddef.h>
 #include <linux/kvm.h>
 #include <strings.h>
 
@@ -17,7 +17,7 @@
 
 #define KVM_DEV		"/dev/kvm"
 #define GUEST_BIN	"./guest.bin"
-#define AARCH64_CORE_REG(x)		(KVM_REG_ARM64 | KVM_REG_SIZE_U64 | KVM_REG_ARM_CORE | KVM_REG_ARM_CORE_REG(x))
+#define ARM32_CORE_REG(x)		(KVM_REG_ARM | KVM_REG_SIZE_U32 | KVM_REG_ARM_CORE | KVM_REG_ARM_CORE_REG(x))
 
 int main(int argc, const char *argv[])
 {
@@ -33,7 +33,7 @@ int main(int argc, const char *argv[])
 	struct kvm_one_reg reg;
 	struct kvm_vcpu_init init;
 	void *userspace_addr;
-	__u64 guest_entry = 0x100000;
+	__u32 guest_entry = 0x100000;
 
 	// 打开kvm模块
 	kvm_fd = open(KVM_DEV, O_RDWR);
@@ -76,22 +76,22 @@ int main(int argc, const char *argv[])
 	// VTTBR_EL2指向的stage2页表中，这个跟intel架构下的EPT技术类似
 	mem.slot = 0;
 	mem.flags = 0;
-	mem.guest_phys_addr = (__u64)0x100000;
-	mem.userspace_addr = (__u64)userspace_addr;
-	mem.memory_size = (__u64)0x1000;
+	mem.guest_phys_addr = (__u32)guest_entry;
+	mem.userspace_addr = (__u32)userspace_addr;
+	mem.memory_size = (__u32)0x1000;
 	ret = ioctl(vm_fd, KVM_SET_USER_MEMORY_REGION, &mem);
 	assert(ret >= 0);
 
-	// 设置cpu的初始信息，因为host使用qemu模拟的cortex-a57，所以这里要
-	// 将target设置为KVM_ARM_TARGET_CORTEX_A57
+	// 设置cpu的初始信息，因为host使用qemu模拟的cortex-a15，所以这里要
+	// 将target设置为KVM_ARM_TARGET_CORTEX_A15
 	bzero(&init, sizeof(init));
-	init.target = KVM_ARM_TARGET_CORTEX_A57;
+	init.target = KVM_ARM_TARGET_CORTEX_A15;
 	ret = ioctl(vcpu_fd, KVM_ARM_VCPU_INIT, &init);
 	assert(ret >= 0);
 
 	// 设置从host进入虚拟机后cpu第一条指令的地址，也就是上面的0x100000
-	reg.id = AARCH64_CORE_REG(regs.pc);
-	reg.addr = (__u64)&guest_entry;
+	reg.id = ARM32_CORE_REG(usr_regs.uregs[15]);
+	reg.addr = (__u32)&guest_entry;
 	ret = ioctl(vcpu_fd, KVM_SET_ONE_REG, &reg);
 	assert(ret >= 0);
 
@@ -100,10 +100,14 @@ int main(int argc, const char *argv[])
 		ret = ioctl(vcpu_fd, KVM_RUN, NULL);
 		assert(ret >= 0);
 
+        //printf("VM EXIT:%d\n",kvm_run->exit_reason);
 		// 根据虚拟机退出的原因完成相应的操作
 		switch (kvm_run->exit_reason) {
+
 		case KVM_EXIT_MMIO:
+            //printf("%d,%d\n",kvm_run->mmio.is_write,kvm_run->mmio.len);
 			if (kvm_run->mmio.is_write && kvm_run->mmio.len == 1) {
+                //printf("phys_addr:%x\n",kvm_run->mmio.phys_addr);
 				if (kvm_run->mmio.phys_addr == OUT_PORT) {
 					// 输出guest写入到OUT_PORT中的信息
 					printf("%c", kvm_run->mmio.data[0]);

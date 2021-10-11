@@ -1,15 +1,17 @@
 #include "register.h"
 
 	.global main
-	.global start
+	.global _start
 	.text
-start:
-	ldr x0, =SP_REG
-	mov sp, x0
+_start:
+	ldr r0, =SP_REG
+	mov sp, r0
 
 	bl  main
 
-	ldr x1, =EXIT_REG
-	mov x0, #1
-	strb w0, [x1]
-	b .
+    ldr r1, =EXIT_REG
+    mov r0, #1
+    strb r0, [r1]
+
+    b .
+
